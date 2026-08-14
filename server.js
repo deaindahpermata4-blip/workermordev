@@ -1,30 +1,25 @@
-const { Client } = require("saweria-api");
 const express = require("express");
-const cors = require("cors");
+const { createMiddleware } = require("saweria-webhook-express");
 
 const app = express();
-app.use(cors());
+app.use(express.json());
+
+const verifySignature = createMiddleware(process.env.SAWERIA_STREAM_KEY, {
+  camelCase: true,
+});
 
 let latestDonations = [];
 
-const client = new Client();
-client.setStreamKey(process.env.SAWERIA_STREAM_KEY);
-
-client.on("donation", (data) => {
-  console.log("Donasi masuk:", data);
+app.post("/webhook/saweria", verifySignature, (req, res) => {
+  console.log("Donasi masuk:", req.body);
   latestDonations.push({
-    donator: data.donator,
-    amount: data.amount,
-    message: data.message,
+    donator: req.body.donatorName,
+    amount: req.body.amountRaw,
+    message: req.body.message,
     timestamp: Date.now(),
   });
   if (latestDonations.length > 50) latestDonations.shift();
-});
-
-client.connect();
-
-app.get("/donations", (req, res) => {
-  res.json(latestDonations);
+  res.sendStatus(200);
 });
 
 app.get("/donations/pull", (req, res) => {
